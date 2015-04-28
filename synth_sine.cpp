@@ -33,6 +33,26 @@ extern const int16_t AudioWaveformSine[257];
 }
 
 
+// Calculate sin(x) where x from 0 to 2**32-1 = a single cycle
+// Output is scaled from -2147385345 to +2147385345
+inline int32_t fixed_sine(uint32_t ph)
+{
+  uint32_t index;
+  index = ph >> 24;
+
+  int32_t val1, val2;
+  val1 = AudioWaveformSine[index];
+  val2 = AudioWaveformSine[index + 1];
+
+  // Linear interpolation
+  uint32_t scale;
+  scale = (ph >> 8) & 0xFFFF;
+  val2 *= scale;
+  val1 *= 0xFFFF - scale;
+  return val1 + val2;
+}
+
+
 void AudioSynthWaveformSine::update(void)
 {
 	audio_block_t *block;
@@ -45,14 +65,8 @@ void AudioSynthWaveformSine::update(void)
 			ph = phase_accumulator;
 			inc = phase_increment;
 			for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
-				index = ph >> 24;
-				val1 = AudioWaveformSine[index];
-				val2 = AudioWaveformSine[index+1];
-				scale = (ph >> 8) & 0xFFFF;
-				val2 *= scale;
-				val1 *= 0xFFFF - scale;
 				//block->data[i] = (((val1 + val2) >> 16) * magnitude) >> 16;
-				block->data[i] = multiply_32x32_rshift32(val1 + val2, magnitude);
+				block->data[i] = multiply_32x32_rshift32(fixed_sine(ph), magnitude);
 				ph += inc;
 			}
 			phase_accumulator = ph;
@@ -93,14 +107,8 @@ void AudioSynthWaveformSineModulated::update(void)
 	}
 	if (modinput) {
 		for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
-			index = ph >> 24;
-			val1 = AudioWaveformSine[index];
-			val2 = AudioWaveformSine[index+1];
-			scale = (ph >> 8) & 0xFFFF;
-			val2 *= scale;
-			val1 *= 0xFFFF - scale;
 			//block->data[i] = (((val1 + val2) >> 16) * magnitude) >> 16;
-			block->data[i] = multiply_32x32_rshift32(val1 + val2, magnitude);
+			block->data[i] = multiply_32x32_rshift32(fixed_sine(ph), magnitude);
 			// -32768 = no phase increment
 			// 32767 = double phase increment
 			mod = modinput->data[i];
@@ -112,13 +120,7 @@ void AudioSynthWaveformSineModulated::update(void)
 		ph = phase_accumulator;
 		inc = phase_increment;
 		for (i=0; i < AUDIO_BLOCK_SAMPLES; i++) {
-			index = ph >> 24;
-			val1 = AudioWaveformSine[index];
-			val2 = AudioWaveformSine[index+1];
-			scale = (ph >> 8) & 0xFFFF;
-			val2 *= scale;
-			val1 *= 0xFFFF - scale;
-			block->data[i] = (val1 + val2) >> 16;
+			block->data[i] = (fixed_sine(ph)) >> 16;
 			ph += inc;
 		}
 	}
@@ -126,5 +128,3 @@ void AudioSynthWaveformSineModulated::update(void)
 	transmit(block);
 	release(block);
 }
-
-
